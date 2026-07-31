@@ -38,7 +38,7 @@ change_impact_analysis_agent/
     docs_tools.py            # architecture-docs search (GCS or local docs/ folder)
     static_analysis.py       # import/call-graph parsing for dependency mapping
   utils/
-    secrets.py               # GCP Secret Manager (github-token)
+    secrets.py               # GCP Secret Manager (git-agent-secret-key)
     telemetry.py              # OpenTelemetry + Cloud Logging
     pdf_export.py             # Markdown -> styled PDF (weasyprint) -> GCS
   tests/
@@ -80,8 +80,9 @@ construct the full pipeline without live credentials.
 - **FinOps cost tiering**: `app_arch_eval_agent` estimates Low (<$50/mo) /
   Medium ($50-$500/mo) / High (>$500/mo) monthly cost impact from newly
   required cloud resources.
-- **Secrets**: the GitHub token is read from Secret Manager
-  (`projects/{PROJECT_ID}/secrets/github-token/versions/latest`) via
+- **Secrets**: the GitHub PAT is read from Secret Manager
+  (`projects/{PROJECT_ID}/secrets/git-agent-secret-key/versions/latest` by
+  default — override the secret name via `GITHUB_TOKEN_SECRET_ID`) via
   `utils/secrets.py`, never hardcoded.
 - **Observability**: `utils/telemetry.py` wires OpenTelemetry tracing +
   Google Cloud Logging so every agent step / tool call is auditable.

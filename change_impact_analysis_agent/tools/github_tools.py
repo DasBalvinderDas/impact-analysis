@@ -69,7 +69,8 @@ def _resolve_token() -> str:
     """Read the GitHub PAT from Secret Manager; fall back to an env var for local dev.
 
     ``get_github_token`` (``utils/secrets.py``) reads
-    ``projects/{PROJECT_ID}/secrets/github-token/versions/latest`` and is
+    ``projects/{PROJECT_ID}/secrets/git-agent-secret-key/versions/latest``
+    (override the secret name via ``GITHUB_TOKEN_SECRET_ID``) and is
     process-lifetime cached, so repeated calls here are cheap — this fetches
     once regardless of how many toolsets/agents call it.
     """

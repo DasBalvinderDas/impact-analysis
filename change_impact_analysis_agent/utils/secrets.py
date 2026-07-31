@@ -63,6 +63,15 @@ def get_secret(secret_id: str, project_id: str | None = None, version: str = "la
     return response.payload.data.decode("UTF-8")
 
 
+GITHUB_TOKEN_SECRET_ID = os.environ.get("GITHUB_TOKEN_SECRET_ID", "git-agent-secret-key")
+
+
 def get_github_token(project_id: str | None = None) -> str:
-    """Convenience wrapper for the GitHub MCP access token secret."""
-    return get_secret("github-token", project_id=project_id)
+    """Convenience wrapper for the GitHub MCP access token secret.
+
+    Reads ``projects/{project_id}/secrets/{GITHUB_TOKEN_SECRET_ID}/versions/latest``.
+    Defaults to the ``git-agent-secret-key`` secret; override the secret name
+    via the ``GITHUB_TOKEN_SECRET_ID`` env var if you provision it under a
+    different name.
+    """
+    return get_secret(GITHUB_TOKEN_SECRET_ID, project_id=project_id)
