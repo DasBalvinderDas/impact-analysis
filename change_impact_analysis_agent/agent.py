@@ -22,11 +22,18 @@ single ParallelAgent design in the requirements doc.
 
 `root_agent` is exported at module level per the Google Cloud Agent Runtime
 execution contract (`adk run` / `adk web` / `AdkApp` all look for this name).
+`app` (an ADK `App` wrapping `root_agent`) is also exported for runtimes
+that expect the newer App contract.
 """
 
 from __future__ import annotations
 
 from google.adk.agents import SequentialAgent
+
+try:
+    from google.adk.apps.app import App
+except ImportError:  # pragma: no cover - older ADK releases without App
+    App = None
 
 from .sub_agents import (
     context_retrieval_parallel,
@@ -59,3 +66,6 @@ root_agent = SequentialAgent(
         publisher_governance_agent,
     ],
 )
+
+if App is not None:
+    app = App(root_agent=root_agent, name="change_impact_analysis_agent")

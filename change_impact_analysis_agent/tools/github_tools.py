@@ -3,19 +3,27 @@
 Two integration paths are provided:
 
 1. ``build_github_mcp_toolset`` — connects the agents to the GitHub MCP
-   Server (stdio or Streamable HTTP) so LlmAgents can call ``get_issue`` /
-   ``issue_read``, ``search_code``, ``get_file_contents``,
-   ``add_issue_comment`` / ``create_issue_comment``, and issue-label tools
-   directly, as the design calls for in section 6 ("Ticket system
-   read/write tool", "GitHub code search tool").
+   server (Copilot's hosted Streamable HTTP endpoint by default, or a local
+   stdio server) so LlmAgents can call ``get_issue``, ``search_code``,
+   ``get_file_contents``, ``create_issue_comment``, ``create_branch``,
+   ``push_files``, ``create_pull_request``, etc. directly, per the design's
+   "Ticket system read/write tool" and "GitHub code search tool"
+   requirements (Section 6).
+
+   The GitHub PAT is read from GCP Secret Manager **once at module import**
+   (mirroring the reference implementation) rather than resolved lazily per
+   request — this is the intended production shape: the process either has
+   a valid secret at startup or fails fast. Set ``ADK_LOCAL_SECRETS=1`` +
+   ``GITHUB_TOKEN=...`` to run/import this module without a live GCP project
+   (used by the test suite; see ``tests/conftest.py``).
 
 2. ``apply_high_risk_governance`` — a plain REST helper (not routed through
    the LLM) that deterministically applies the ``impact:high-risk`` label
    and tags ``@tech-lead-review`` whenever
    ``ImpactAssessment.requires_human_approval`` is True. HITL enforcement is
    a compliance guardrail, so it must not depend on the LLM remembering to
-   call the right tool — the Publisher agent's callback invokes this
-   directly against session state.
+   call the right tool — the Publisher agent's tool invokes this directly
+   against session state.
 """
 
 from __future__ import annotations
@@ -28,13 +36,43 @@ import requests
 from ..utils.secrets import get_github_token
 from ..utils.telemetry import audit_event, get_logger
 
+# --- Version-tolerant MCP imports -------------------------------------------------
+# ADK renamed MCPToolset -> McpToolset and StreamableHTTPServerParams ->
+# StreamableHTTPConnectionParams; both old names remain as aliases in recent
+# releases but that isn't guaranteed across versions, so prefer the current
+# names and fall back to the older ones.
+try:
+    from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
+except ImportError:  # pragma: no cover - older ADK releases
+    from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset as McpToolset
+
+try:
+    from google.adk.tools.mcp_tool.mcp_session_manager import (
+        StreamableHTTPConnectionParams as StreamableHTTPServerParams,
+    )
+except ImportError:  # pragma: no cover - older ADK releases
+    from google.adk.tools.mcp_tool.mcp_session_manager import (
+        StreamableHTTPServerParams,
+    )
+# -----------------------------------------------------------------------------------
+
 GITHUB_API_ROOT = "https://api.github.com"
 HIGH_RISK_LABEL = "impact:high-risk"
 TECH_LEAD_MENTION = "@tech-lead-review"
 
+# GitHub's hosted Copilot coding-agent MCP endpoint (Streamable HTTP). Override
+# with GITHUB_MCP_URL to point at a self-hosted github-mcp-server instead.
+DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
+
 
 def _resolve_token() -> str:
-    """Prefer Secret Manager; fall back to GITHUB_TOKEN env var for local dev."""
+    """Read the GitHub PAT from Secret Manager; fall back to an env var for local dev.
+
+    ``get_github_token`` (``utils/secrets.py``) reads
+    ``projects/{PROJECT_ID}/secrets/github-token/versions/latest`` and is
+    process-lifetime cached, so repeated calls here are cheap — this fetches
+    once regardless of how many toolsets/agents call it.
+    """
     try:
         return get_github_token()
     except Exception:  # noqa: BLE001
@@ -44,40 +82,26 @@ def _resolve_token() -> str:
         raise
 
 
-def _lazy_auth_header(_readonly_context=None) -> dict:
-    """Resolved at MCP-session-connect time, not at toolset-construction time.
-
-    Keeps module import (and therefore agent construction / eval-set loading)
-    working even when Secret Manager / GITHUB_TOKEN aren't configured yet —
-    the token is only required once an agent actually calls a GitHub tool.
-    """
-    return {"Authorization": f"Bearer {_resolve_token()}"}
+# Fetched once at module load, mirroring the reference implementation: the
+# process either has a valid GitHub PAT at startup, or fails fast rather than
+# failing deep inside a tool call mid-pipeline.
+GITHUB_PAT = _resolve_token()
 
 
-def build_github_mcp_toolset(tool_filter: Optional[list[str]] = None):
+def build_github_mcp_toolset(tool_filter: Optional[list[str]] = None) -> McpToolset:
     """Build an McpToolset connected to the GitHub MCP server.
 
-    Transport is selected via ``GITHUB_MCP_TRANSPORT`` (``http`` default, or
-    ``stdio`` to launch the local ``github-mcp-server`` binary). The auth
-    token is resolved from GCP Secret Manager (``github-token``) per the
-    security guardrail, with an env-var fallback for local development. For
-    the default HTTP transport, resolution is deferred to session-connect
-    time via ``header_provider`` so importing this module never requires
-    credentials to be present.
+    Transport is selected via ``GITHUB_MCP_TRANSPORT`` (``http`` default —
+    GitHub's hosted Copilot MCP endpoint — or ``stdio`` to launch the local
+    ``github-mcp-server`` container). Both paths use the ``GITHUB_PAT``
+    resolved at module import.
     """
-    from google.adk.tools.mcp_tool.mcp_session_manager import (
-        StdioConnectionParams,
-        StreamableHTTPConnectionParams,
-    )
-    from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
-    from mcp import StdioServerParameters
-
     transport = os.environ.get("GITHUB_MCP_TRANSPORT", "http")
 
     if transport == "stdio":
-        # Stdio env vars must be fixed at process-launch time, so the token
-        # is resolved eagerly here; stdio is an opt-in transport (not the
-        # default), so this does not affect ordinary module import.
+        from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
+        from mcp import StdioServerParameters
+
         connection_params = StdioConnectionParams(
             server_params=StdioServerParameters(
                 command="docker",
@@ -86,45 +110,42 @@ def build_github_mcp_toolset(tool_filter: Optional[list[str]] = None):
                     "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
                     "ghcr.io/github/github-mcp-server",
                 ],
-                env={"GITHUB_PERSONAL_ACCESS_TOKEN": _resolve_token()},
+                env={"GITHUB_PERSONAL_ACCESS_TOKEN": GITHUB_PAT},
             ),
             timeout=30,
         )
         return McpToolset(connection_params=connection_params, tool_filter=tool_filter)
 
-    connection_params = StreamableHTTPConnectionParams(
-        url=os.environ.get("GITHUB_MCP_URL", "https://api.github.com/mcp"),
-        timeout=30,
+    connection_params = StreamableHTTPServerParams(
+        url=os.environ.get("GITHUB_MCP_URL", DEFAULT_GITHUB_MCP_URL),
+        headers={"Authorization": f"Bearer {GITHUB_PAT}"},
     )
-    return McpToolset(
-        connection_params=connection_params,
-        tool_filter=tool_filter,
-        header_provider=_lazy_auth_header,
-    )
+    return McpToolset(connection_params=connection_params, tool_filter=tool_filter)
 
 
-def build_intake_toolset():
+def build_intake_toolset() -> McpToolset:
     """Read-only tools for the Intent Extractor Agent: reading the triggering issue."""
     return build_github_mcp_toolset(
-        tool_filter=["get_issue", "issue_read", "list_issue_fields"]
+        tool_filter=["get_issue", "list_issues", "get_repository"]
     )
 
 
-def build_code_search_toolset():
+def build_code_search_toolset() -> McpToolset:
     """Read-only tools for the Context Retrieval / Dependency Mapper agents."""
     return build_github_mcp_toolset(
-        tool_filter=["search_code", "get_file_contents", "list_commits"]
+        tool_filter=["search_code", "get_file_contents", "get_pull_request", "list_pull_requests"]
     )
 
 
-def build_publisher_toolset():
+def build_publisher_toolset() -> McpToolset:
     """Write tools for the Publisher & Governance Agent."""
     return build_github_mcp_toolset(
         tool_filter=[
             "create_issue_comment",
-            "add_issue_comment",
-            "issue_write",
-            "get_label",
+            "create_branch",
+            "create_or_update_file",
+            "push_files",
+            "create_pull_request",
         ]
     )
 
@@ -138,14 +159,13 @@ def apply_high_risk_governance(
 ) -> dict:
     """Deterministically apply the high-risk HITL label + review request.
 
-    Called from the Publisher agent's callback (not left to LLM discretion)
+    Called from the Publisher agent's tool (not left to LLM discretion)
     whenever ``requires_human_approval`` is True, so the guardrail always
     fires regardless of what the model decided to do with its tools.
     """
     logger = get_logger()
-    token = _resolve_token()
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {GITHUB_PAT}",
         "Accept": "application/vnd.github+json",
     }
 
@@ -195,9 +215,8 @@ def post_impact_summary_comment(
 ) -> dict:
     """Post the final impact summary + PDF link as an issue comment."""
     logger = get_logger()
-    token = _resolve_token()
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {GITHUB_PAT}",
         "Accept": "application/vnd.github+json",
     }
     body = (

@@ -55,16 +55,20 @@ cp change_impact_analysis_agent/.env.example change_impact_analysis_agent/.env
 # edit .env: GOOGLE_CLOUD_PROJECT, REPORTS_GCS_BUCKET, ARCHITECTURE_DOCS_BUCKET, etc.
 ```
 
-Local development without live GCP/GitHub credentials:
+The GitHub PAT is read from Secret Manager **once, at process/import time**
+(`tools/github_tools.py` fetches it at module load, mirroring production
+behavior: fail fast if no valid secret is configured, rather than failing
+deep inside a tool call mid-pipeline). For local development without a live
+GCP project:
 
 ```bash
 export ADK_LOCAL_SECRETS=1
-export GITHUB_TOKEN=ghp_xxx  # only needed once an agent actually calls a GitHub tool
+export GITHUB_TOKEN=ghp_xxx
 ```
 
-All secret/token resolution is lazy (deferred to first tool call), so the
-pipeline can be constructed and its structure tested (`tests/test_agent_structure.py`)
-with zero credentials configured.
+`tests/conftest.py` sets these automatically (with a placeholder token) so
+the structural test suite (`tests/test_agent_structure.py`) can import and
+construct the full pipeline without live credentials.
 
 ## Governance guardrails
 
