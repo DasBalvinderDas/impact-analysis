@@ -1,0 +1,74 @@
+{
+  "eval_set_id": "change_impact",
+  "name": "Change Impact Analysis Agent \u2014 core scenarios",
+  "description": "Benchmarks the end-to-end pipeline against a high-risk breaking-API scenario (must trigger HITL governance) and a low-risk additive scenario (must not trigger HITL governance).",
+  "eval_cases": [
+    {
+      "eval_id": "high_risk_breaking_api_change",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Analyze change impact for issue_number 512 in repo acme-corp/billing-service. The issue requests removing the `legacy_customer_id` field from the /v1/invoices response and replacing it with `customer_ref`."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Change Impact Assessment published: risk_level=High, requires_human_approval=true, impact:high-risk label applied, @tech-lead-review tagged for sign-off due to a breaking API contract change on /v1/invoices."
+              }
+            ],
+            "role": "model"
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "session_input": {
+        "app_name": "change_impact_analysis_agent",
+        "user_id": "eval-user",
+        "session_id": "eval-session-1",
+        "state": {}
+      },
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "low_risk_additive_change",
+      "conversation": [
+        {
+          "invocation_id": "inv-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Analyze change impact for issue_number 88 in repo acme-corp/notifications-service. The issue requests adding an optional `preferred_locale` field to the user preferences table, defaulting to 'en-US', with no changes to existing API responses."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Change Impact Assessment published: risk_level=Low, requires_human_approval=false, finops_cost_impact=Low (<$50/mo), no breaking changes identified."
+              }
+            ],
+            "role": "model"
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "session_input": {
+        "app_name": "change_impact_analysis_agent",
+        "user_id": "eval-user",
+        "session_id": "eval-session-2",
+        "state": {}
+      },
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    }
+  ],
+  "creation_timestamp": 0.0
+}
