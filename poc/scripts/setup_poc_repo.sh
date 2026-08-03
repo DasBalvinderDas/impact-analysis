@@ -20,7 +20,8 @@ for command_name in git gh; do
 done
 
 gh auth status >/dev/null
-owner="$(gh api user --jq .login)"
+authenticated_owner="$(gh api user --jq .login)"
+owner="${POC_REPO_OWNER:-${authenticated_owner}}"
 repository="${owner}/${repo_name}"
 
 if gh repo view "${repository}" >/dev/null 2>&1; then

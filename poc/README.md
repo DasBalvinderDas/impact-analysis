@@ -62,14 +62,16 @@ curl -fsSL \
 ```
 
 The bootstrap script downloads this repository at `feat/poc-test-data`, then
-runs the complete setup. It passes `POC_REPO_NAME` and
+runs the complete setup. It passes `POC_REPO_OWNER`, `POC_REPO_NAME`, and
 `POC_REPO_VISIBILITY` through to the setup script, so customization works with
-the direct command:
+the direct command. Enterprise Managed Users should select an organization in
+which they can create repositories and use private visibility:
 
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/DasBalvinderDas/impact-analysis/feat/poc-test-data/poc/scripts/bootstrap_poc.sh \
-  | POC_REPO_NAME=my-impact-poc POC_REPO_VISIBILITY=private bash
+  | POC_REPO_OWNER=my-enterprise-org POC_REPO_NAME=my-impact-poc \
+    POC_REPO_VISIBILITY=private bash
 ```
 
 The only local prerequisites are `git`, the GitHub CLI (`gh`), and an
@@ -84,10 +86,12 @@ From the impact-analysis repository root:
 ```
 
 The default repository is public and named `impact-analysis-poc-target` under
-the authenticated GitHub user. Override either setting when necessary:
+the authenticated GitHub user. Override the owner, name, or visibility when
+necessary:
 
 ```bash
-POC_REPO_NAME=my-impact-poc POC_REPO_VISIBILITY=private \
+POC_REPO_OWNER=my-enterprise-org POC_REPO_NAME=my-impact-poc \
+  POC_REPO_VISIBILITY=private \
   ./poc/scripts/setup_poc_repo.sh
 ```
 
