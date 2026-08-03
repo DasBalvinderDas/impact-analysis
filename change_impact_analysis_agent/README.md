@@ -118,6 +118,13 @@ Structural smoke tests (no live credentials required):
 pytest change_impact_analysis_agent/tests/test_agent_structure.py
 ```
 
+## End-to-end POC test data
+
+A complete disposable billing application, Low/Medium/High risk issue bodies,
+GitHub setup automation, environment guidance, expected outcomes, and GitHub/GCS
+validation commands are available in [`poc/`](../poc/README.md). Start there
+when testing the full issue-to-PDF publishing flow against a real repository.
+
 ## Deployment (Vertex AI Agent Engine)
 
 ```bash
