@@ -40,7 +40,7 @@ change_impact_analysis_agent/
   utils/
     secrets.py               # GCP Secret Manager (git-agent-secret-key)
     telemetry.py              # OpenTelemetry + Cloud Logging
-    pdf_export.py             # Markdown -> styled PDF (weasyprint) -> GCS
+    pdf_export.py             # Markdown -> styled PDF (weasyprint, xhtml2pdf fallback) -> GCS
   tests/
     test_agent_structure.py
     eval/evalsets/change_impact.evalset.json
