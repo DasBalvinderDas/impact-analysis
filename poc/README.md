@@ -98,6 +98,30 @@ POC_REPO_OWNER=my-enterprise-org POC_REPO_NAME=my-impact-poc \
 The script refuses to overwrite an existing repository. It prints the three
 created issue URLs; retain their issue numbers for execution and validation.
 
+### Create issues in an existing enterprise repository
+
+If the target repository already exists and contains the POC application, run
+the issue-only script. This does not create or push a repository and does not
+require `gh auth login`; GitHub CLI reads `GH_TOKEN` or `GITHUB_TOKEN`.
+
+```bash
+export GH_TOKEN="$(gcloud secrets versions access latest \
+  --secret=git-agent-secret-key --project=YOUR_GCP_PROJECT_ID)"
+
+curl -fsSL \
+  https://raw.githubusercontent.com/DasBalvinderDas/impact-analysis/feat/poc-test-data/poc/scripts/create_poc_issues.sh \
+  | POC_TARGET_REPO=YOUR_ENTERPRISE_ORG/YOUR_REPOSITORY \
+    POC_SOURCE_REF=main \
+    POC_APP_ROOT=poc/target_app \
+    bash
+```
+
+The token needs repository metadata read and Issues write permission. The
+script creates or updates the `impact:high-risk` label, avoids duplicate POC
+issue titles, creates the three issues, and prints their URLs. Override
+`POC_SOURCE_REF` and `POC_APP_ROOT` if the application is on another branch or
+at another path.
+
 ## 3. Run the agent
 
 Load the completed environment file using your preferred environment loader,
