@@ -50,6 +50,33 @@ ruff check .
 
 ## 2. Create the disposable GitHub target
 
+### One-command setup
+
+You do not need to clone or check out the impact-analysis repository first.
+Run the hosted bootstrap script directly:
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/DasBalvinderDas/impact-analysis/feat/poc-test-data/poc/scripts/bootstrap_poc.sh \
+  | bash
+```
+
+The bootstrap script downloads this repository at `feat/poc-test-data`, then
+runs the complete setup. It passes `POC_REPO_NAME` and
+`POC_REPO_VISIBILITY` through to the setup script, so customization works with
+the direct command:
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/DasBalvinderDas/impact-analysis/feat/poc-test-data/poc/scripts/bootstrap_poc.sh \
+  | POC_REPO_NAME=my-impact-poc POC_REPO_VISIBILITY=private bash
+```
+
+The only local prerequisites are `git`, the GitHub CLI (`gh`), and an
+authenticated GitHub CLI session (`gh auth login`).
+
+### From an existing checkout
+
 From the impact-analysis repository root:
 
 ```bash
