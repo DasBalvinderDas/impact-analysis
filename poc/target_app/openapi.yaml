@@ -1,0 +1,57 @@
+openapi: 3.0.3
+info:
+  title: Impact Analysis POC Billing API
+  version: 1.0.0
+paths:
+  /v1/invoices/{invoice_id}:
+    get:
+      operationId: getInvoice
+      parameters:
+        - name: invoice_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invoice found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '404':
+          description: Invoice not found
+  /v1/invoices/export:
+    get:
+      operationId: exportInvoices
+      responses:
+        '200':
+          description: Synchronous invoice CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+components:
+  schemas:
+    Invoice:
+      type: object
+      required:
+        - invoice_id
+        - legacy_customer_id
+        - customer_name
+        - amount
+        - currency
+      properties:
+        invoice_id:
+          type: string
+        legacy_customer_id:
+          type: string
+          description: Stable v1 customer identifier required by reporting consumers.
+        customer_name:
+          type: string
+        amount:
+          type: string
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
